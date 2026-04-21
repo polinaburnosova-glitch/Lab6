@@ -1,7 +1,7 @@
 package client.console;
 
 import common.model.*;
-import common.console.InputReader;
+
 import java.util.Scanner;
 
 /**

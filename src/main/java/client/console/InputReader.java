@@ -1,4 +1,4 @@
-package common.console;
+package client.console;
 
 import common.model.HumanBeing;
 

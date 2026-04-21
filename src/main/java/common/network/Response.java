@@ -26,13 +26,12 @@ import java.util.List;
 public class Response implements Serializable {
 
     /** Версия для сериализации, обеспечивающая совместимость версий. */
-    private static final long serialVersionUID = 1L;
-
-    /** Флаг успешности выполнения команды на сервере. */
-    private final boolean success;
+    private static final long serialVersionUID = 2L;
 
     /** Текстовое сообщение с результатом выполнения или описанием ошибки. */
     private final String message;
+
+    private final ResponseStatus status;
 
     /**
      * Дополнительные данные, передаваемые клиенту.
@@ -48,8 +47,8 @@ public class Response implements Serializable {
      * @param message текстовое сообщение о результате
      * @param data список данных (например, коллекция объектов для SHOW)
      */
-    public Response(boolean success, String message, List<?> data) {
-        this.success = success;
+    public Response(ResponseStatus status, String message, List<?> data) {
+        this.status = status;
         this.message = message;
         this.data = data;
     }
@@ -60,8 +59,8 @@ public class Response implements Serializable {
      * @param success флаг успешности выполнения команды
      * @param message текстовое сообщение о результате
      */
-    public Response(boolean success, String message) {
-        this(success, message, null);
+    public Response(ResponseStatus status, String message) {
+        this(status, message, null);
     }
 
     /**
@@ -70,7 +69,7 @@ public class Response implements Serializable {
      * @return true, если команда выполнена успешно; false в случае ошибки
      */
     public boolean isSuccess() {
-        return success;
+        return status == ResponseStatus.OK;
     }
 
     /**
@@ -89,5 +88,9 @@ public class Response implements Serializable {
      */
     public List<?> getData() {
         return data;
+    }
+
+    public ResponseStatus getStatus() {
+        return status;
     }
 }

@@ -6,54 +6,16 @@ import server.manager.FileManager;
 import common.model.HumanBeing;
 import common.model.Mood;
 
-/**
- * Исполнитель команд на сервере.
- *
- * <p>Получает запросы от клиента, выполняет соответствующую команду
- * над коллекцией через {@link CollectionManager} и формирует ответ
- * для отправки обратно клиенту.</p>
- *
- * <p>Класс обрабатывает все типы команд, поддерживаемые приложением,
- * включая добавление, удаление, обновление, фильтрацию и отображение
- * элементов коллекции.</p>
- *
- * @author Полина
- * @version 1.0
- * @since 2026-04-20
- * @see CollectionManager
- * @see FileManager
- * @see Request
- * @see Response
- */
 public class CommandExecutor {
 
-    /** Менеджер коллекции для выполнения операций над данными. */
     private final CollectionManager collectionManager;
-
-    /** Менеджер файлов для сохранения коллекции. */
     private final FileManager fileManager;
 
-    /**
-     * Конструктор исполнителя команд.
-     *
-     * @param collectionManager менеджер коллекции
-     * @param fileManager менеджер файлов
-     */
     public CommandExecutor(CollectionManager collectionManager, FileManager fileManager) {
         this.collectionManager = collectionManager;
         this.fileManager = fileManager;
     }
 
-    /**
-     * Выполняет команду из запроса и формирует ответ.
-     *
-     * <p>В зависимости от типа команды извлекает аргументы из запроса,
-     * вызывает соответствующий метод {@link CollectionManager} и
-     * возвращает результат в виде {@link Response}.</p>
-     *
-     * @param request объект запроса с типом команды и аргументами
-     * @return объект ответа с результатом выполнения команды
-     */
     public Response execute(Request request) {
         CommandType type = request.getCommandType();
         Object[] args = request.getArgs();
@@ -61,105 +23,88 @@ public class CommandExecutor {
         try {
             switch (type) {
                 case INFO:
-                    return new Response(true, collectionManager.info(), null);
+                    return ok(collectionManager.info());
 
                 case SHOW:
-                    return new Response(true, collectionManager.show(), null);
+                    return new Response(ResponseStatus.OK, collectionManager.show(),
+                            collectionManager.getCollection().stream().collect(java.util.stream.Collectors.toList()));
 
                 case HELP:
-                    return new Response(true, collectionManager.help(), null);
+                    return ok(collectionManager.help());
 
                 case EXIT:
-                    return new Response(true, "До свидания!", null);
+                    return ok("До свидания!");
 
                 case ADD:
-                    if (args != null && args.length > 0 && args[0] instanceof HumanBeing) {
-                        HumanBeing newHuman = (HumanBeing) args[0];
-                        String addResult = collectionManager.add(newHuman);
-                        return new Response(true, addResult, null);
+                    HumanBeing newHuman = getArg(args, 0, HumanBeing.class);
+                    if (newHuman == null) {
+                        return validationError("не указан объект для добавления");
                     }
-                    return new Response(false, "Ошибка: не указан объект для добавления", null);
+                    return ok(collectionManager.add(newHuman));
 
                 case ADD_IF_MIN:
-                    if (args != null && args.length > 0 && args[0] instanceof HumanBeing) {
-                        HumanBeing minHuman = (HumanBeing) args[0];
-                        String minResult = collectionManager.addIfMin(minHuman);
-                        return new Response(true, minResult, null);
+                    HumanBeing minHuman = getArg(args, 0, HumanBeing.class);
+                    if (minHuman == null) {
+                        return validationError("не указан объект для добавления");
                     }
-                    return new Response(false, "Ошибка: не указан объект для добавления", null);
+                    return handleAddResult(collectionManager.addIfMin(minHuman));
 
                 case ADD_IF_MAX:
-                    if (args != null && args.length > 0 && args[0] instanceof HumanBeing) {
-                        HumanBeing maxHuman = (HumanBeing) args[0];
-                        String maxResult = collectionManager.addIfMax(maxHuman);
-                        return new Response(true, maxResult, null);
+                    HumanBeing maxHuman = getArg(args, 0, HumanBeing.class);
+                    if (maxHuman == null) {
+                        return validationError("не указан объект для добавления");
                     }
-                    return new Response(false, "Ошибка: не указан объект для добавления", null);
+                    return handleAddResult(collectionManager.addIfMax(maxHuman));
 
                 case MIN_BY_ID:
-                    String minByIdResult = collectionManager.minById();
-                    return new Response(true, minByIdResult, null);
+                    return ok(collectionManager.minById());
 
                 case REMOVE_BY_ID:
-                    if (args != null && args.length > 0 && args[0] instanceof Long) {
-                        Long idToRemove = (Long) args[0];
-                        String removeResult = collectionManager.removeById(idToRemove);
-                        return new Response(true, removeResult, null);
+                    Long idToRemove = getArg(args, 0, Long.class);
+                    if (idToRemove == null) {
+                        return validationError("не указан id для удаления");
                     }
-                    return new Response(false, "Ошибка: не указан id для удаления", null);
+                    return handleRemoveResult(collectionManager.removeById(idToRemove));
 
                 case CLEAR:
-                    String clearResult = collectionManager.clear();
-                    return new Response(true, clearResult, null);
+                    return ok(collectionManager.clear());
 
                 case REMOVE_FIRST:
-                    String removeFirstResult = collectionManager.removeFirst();
-                    return new Response(true, removeFirstResult, null);
+                    return ok(collectionManager.removeFirst());
 
                 case UPDATE:
-                    if (args != null && args.length >= 2 && args[0] instanceof Long && args[1] instanceof HumanBeing) {
-                        Long updateId = (Long) args[0];
-                        HumanBeing updateHuman = (HumanBeing) args[1];
-                        String updateResult = collectionManager.update(updateId, updateHuman);
-                        return new Response(true, updateResult, null);
+                    Long updateId = getArg(args, 0, Long.class);
+                    HumanBeing updateHuman = getArg(args, 1, HumanBeing.class);
+                    if (updateId == null || updateHuman == null) {
+                        return validationError("не указан id или объект для обновления");
                     }
-                    return new Response(false, "Ошибка: не указан id или объект для обновления", null);
+                    return handleUpdateResult(collectionManager.update(updateId, updateHuman));
 
                 case FILTER_BY_MOOD:
-                    if (args != null && args.length > 0 && args[0] instanceof Mood) {
-                        Mood mood = (Mood) args[0];
-                        String filterMoodResult = collectionManager.filterByMood(mood);
-                        return new Response(true, filterMoodResult, null);
+                    Mood mood = getArg(args, 0, Mood.class);
+                    if (mood == null) {
+                        return validationError("не указано настроение для фильтрации");
                     }
-                    return new Response(false, "Ошибка: не указано настроение для фильтрации", null);
+                    return ok(collectionManager.filterByMood(mood));
 
                 case FILTER_STARTS_WITH_SOUNDTRACK_NAME:
-                    if (args != null && args.length > 0 && args[0] instanceof String) {
-                        String prefix = (String) args[0];
-                        String filterNameResult = collectionManager.filterStartsWithSoundtrackName(prefix);
-                        return new Response(true, filterNameResult, null);
+                    String prefix = getArg(args, 0, String.class);
+                    if (prefix == null) {
+                        return validationError("не указана подстрока для фильтрации");
                     }
-                    return new Response(false, "Ошибка: не указана подстрока для фильтрации", null);
+                    return ok(collectionManager.filterStartsWithSoundtrackName(prefix));
 
                 case EXECUTE_SCRIPT:
-                    return new Response(true, "Команда выполнена", null);
+                    return ok("Команда выполнена");
 
                 default:
-                    return new Response(false, "Команда не реализована: " + type, null);
+                    return unknownCommand(type);
             }
         } catch (Exception e) {
-            return new Response(false, "Ошибка выполнения: " + e.getMessage(), null);
+            return serverError("Ошибка выполнения: " + e.getMessage());
         }
     }
 
-    /**
-     * Сохраняет текущую коллекцию в файл.
-     *
-     * <p>Это специальная команда, доступная только на сервере.
-     * Клиент не может отправить эту команду.</p>
-     *
-     * @return сообщение о результате сохранения
-     */
     public String save() {
         try {
             fileManager.saveCollection(collectionManager.getCollection());
@@ -167,5 +112,61 @@ public class CommandExecutor {
         } catch (Exception e) {
             return "Ошибка сохранения: " + e.getMessage();
         }
+    }
+
+
+    @SuppressWarnings("unchecked")
+    private <T> T getArg(Object[] args, int index, Class<T> type) {
+        if (args != null && args.length > index && type.isInstance(args[index])) {
+            return (T) args[index];
+        }
+        return null;
+    }
+
+
+    private Response handleAddResult(String result) {
+        if (result.contains("не добавлен")) {
+            return warning(result);
+        }
+        return ok(result);
+    }
+
+    private Response handleRemoveResult(String result) {
+        if (result.contains("не найден")) {
+            return notFound(result);
+        }
+        return ok(result);
+    }
+
+    private Response handleUpdateResult(String result) {
+        if (result.contains("не найден")) {
+            return notFound(result);
+        }
+        return ok(result);
+    }
+
+
+    private Response ok(String message) {
+        return new Response(ResponseStatus.OK, message);
+    }
+
+    private Response warning(String message) {
+        return new Response(ResponseStatus.WARNING, message);
+    }
+
+    private Response notFound(String message) {
+        return new Response(ResponseStatus.NOT_FOUND, message);
+    }
+
+    private Response validationError(String message) {
+        return new Response(ResponseStatus.VALIDATION_ERROR, "Ошибка: " + message);
+    }
+
+    private Response serverError(String message) {
+        return new Response(ResponseStatus.SERVER_ERROR, message);
+    }
+
+    private Response unknownCommand(CommandType type) {
+        return new Response(ResponseStatus.UNKNOWN_COMMAND, "Команда не реализована: " + type);
     }
 }
