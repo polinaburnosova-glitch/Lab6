@@ -1,0 +1,35 @@
+# Добавляем первого человека
+add John 10 10 true true 100 Rock SHOTGUN SORROW true
+
+# Добавляем второго (минимальный impactSpeed)
+add_if_min Jane 5 5 false false 30 Pop KNIFE GLOOM false
+
+# Добавляем третьего (максимальный impactSpeed)
+add_if_max Bob 20 20 true true 200 Metal HAMMER LONGING true
+
+# Показываем все элементы
+show
+
+# Показываем элемент с минимальным ID
+min_by_id
+
+# Обновляем элемент с ID 2
+update 2 JaneUpdated 15 15 false false 50 Jazz BAT APATHY true
+
+# Показываем элементы с настроением SORROW
+filter_by_mood SORROW
+
+# Показываем элементы, чей саундтрек начинается на 'Ro'
+filter_starts_with_soundtrack_name Ro
+
+# Удаляем элемент с ID 1
+remove_by_id 1
+
+# Показываем оставшиеся элементы
+show
+
+# Очищаем коллекцию
+clear
+
+# Проверяем
+show
