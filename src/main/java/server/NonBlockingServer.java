@@ -2,19 +2,24 @@ package server;
 
 import common.network.Request;
 import common.network.Response;
+import common.network.CommandType;
 import java.io.*;
+import java.net.BindException;
 import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
-import java.nio.channels.*;
-import java.util.*;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.net.SocketException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class NonBlockingServer {
 
     private final int port;
     private final CommandExecutor commandExecutor;
-    private volatile boolean running = true;
-    private Selector selector;
-    private ServerSocketChannel serverChannel;
+    private final AtomicBoolean running = new AtomicBoolean(true);
+    private final ExecutorService clientPool = Executors.newCachedThreadPool();
+    private ServerSocket serverSocket;
 
     public NonBlockingServer(int port, CommandExecutor commandExecutor) {
         this.port = port;
@@ -22,105 +27,83 @@ public class NonBlockingServer {
     }
 
     public void start() {
-        try {
-            selector = Selector.open();
-
-            serverChannel = ServerSocketChannel.open();
-            serverChannel.bind(new InetSocketAddress(port));
-            serverChannel.configureBlocking(false);
-
-            serverChannel.register(selector, SelectionKey.OP_ACCEPT);
+        try (ServerSocket localServerSocket = new ServerSocket()) {
+            this.serverSocket = localServerSocket;
+            localServerSocket.setReuseAddress(true);
+            localServerSocket.bind(new InetSocketAddress(port));
 
             System.out.println("Сервер запущен на порту " + port);
+            System.out.println("Ожидание подключений...");
 
-            while (running) {
-                selector.select(100);
+            while (running.get()) {
+                Socket client = localServerSocket.accept();
+                clientPool.submit(() -> handleClient(client));
+            }
 
-                Iterator<SelectionKey> keys = selector.selectedKeys().iterator();
-
-                while (keys.hasNext()) {
-                    SelectionKey key = keys.next();
-                    keys.remove();
-
-                    if (!key.isValid()) continue;
-
-                    if (key.isAcceptable()) {
-                        acceptClient(key);
-                    }
-
-                    if (key.isReadable()) {
-                        readClientData(key);
-                    }
-                }
+        } catch (BindException e) {
+            System.err.println("Порт " + port + " уже занят. Остановите процесс на этом порту или запустите сервер на другом порту.");
+        } catch (SocketException e) {
+            if (running.get()) {
+                System.err.println("Ошибка сокета сервера: " + e.getMessage());
             }
         } catch (IOException e) {
+            System.err.println("Ошибка сервера: " + e.getMessage());
             e.printStackTrace();
+        } finally {
+            clientPool.shutdownNow();
         }
     }
 
-    private void acceptClient(SelectionKey key) throws IOException {
-        ServerSocketChannel server = (ServerSocketChannel) key.channel();
-        SocketChannel client = server.accept();
-        client.configureBlocking(false);
-        client.register(selector, SelectionKey.OP_READ);
-        System.out.println("Клиент подключился");
-    }
+    private void handleClient(Socket client) {
+        try (Socket socket = client;
+             ObjectOutputStream oos = new ObjectOutputStream(socket.getOutputStream());
+             ObjectInputStream ois = new ObjectInputStream(socket.getInputStream())) {
 
-    private void readClientData(SelectionKey key) throws IOException {
-        SocketChannel client = (SocketChannel) key.channel();
-        ByteBuffer buffer = ByteBuffer.allocate(8192);
+            System.out.println("Клиент подключился: " + socket.getRemoteSocketAddress());
 
-        int bytesRead = client.read(buffer);
+            while (running.get() && !socket.isClosed()) {
+                Request request;
+                try {
+                    request = (Request) ois.readObject();
+                } catch (EOFException ignored) {
+                    break;
+                }
 
-        if (bytesRead == -1) {
-            // Клиент отключился
-            key.cancel();
-            client.close();
-            System.out.println("Клиент отключился");
-            return;
-        }
-
-        if (bytesRead > 0) {
-            buffer.flip();
-            byte[] data = new byte[buffer.remaining()];
-            buffer.get(data);
-
-            try (ByteArrayInputStream bais = new ByteArrayInputStream(data);
-                 ObjectInputStream ois = new ObjectInputStream(bais)) {
-
-                Request request = (Request) ois.readObject();
-                System.out.println("Команда: " + request.getCommandType());
-
+                System.out.println("Получена команда: " + request.getCommandType());
                 Response response = commandExecutor.execute(request);
+                sendResponse(oos, response);
 
-                sendResponse(client, response);
-
-            } catch (ClassNotFoundException e) {
-                System.err.println("Ошибка: " + e.getMessage());
+                if (request.getCommandType() == CommandType.EXIT) {
+                    System.out.println("Клиент завершил работу");
+                    break;
+                }
             }
+        } catch (SocketException e) {
+            System.out.println("Соединение с клиентом закрыто: " + e.getMessage());
+        } catch (IOException | ClassNotFoundException e) {
+            System.err.println("Ошибка обработки клиента: " + e.getMessage());
         }
+
+        System.out.println("Клиент отключился");
     }
 
-    private void sendResponse(SocketChannel client, Response response) throws IOException {
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        ObjectOutputStream oos = new ObjectOutputStream(baos);
+    private void sendResponse(ObjectOutputStream oos, Response response) throws IOException {
         oos.writeObject(response);
         oos.flush();
-
-        ByteBuffer buffer = ByteBuffer.wrap(baos.toByteArray());
-        while (buffer.hasRemaining()) {
-            client.write(buffer);
-        }
+        oos.reset();
         System.out.println("Ответ отправлен");
     }
 
     public void stop() {
-        running = false;
+        running.set(false);
         try {
-            if (selector != null) selector.close();
-            if (serverChannel != null) serverChannel.close();
+            if (serverSocket != null && !serverSocket.isClosed()) {
+                serverSocket.close();
+            }
+            clientPool.shutdownNow();
+            System.out.println("Сервер остановлен");
         } catch (IOException e) {
-            e.printStackTrace();
+            System.err.println("Ошибка при остановке: " + e.getMessage());
         }
     }
 }

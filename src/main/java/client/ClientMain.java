@@ -11,7 +11,7 @@ public class ClientMain {
 
     public static void main(String[] args) {
         String host = EnvLoader.get("CLIENT_HOST", "localhost");
-        int port = EnvLoader.getInt("CLIENT_PORT", 8888);
+        int port = EnvLoader.getInt("CLIENT_PORT", 5555);
 
         if (args.length > 0) {
             host = args[0];
