@@ -21,7 +21,7 @@ public class AddIfMaxCommand implements Command {
         System.out.println("Введите данные для нового элемента:");
         HumanBeing newHuman = inputReader.readHumanBeing();
 
-        Request request = new Request(CommandType.ADD_IF_MAX, new Object[]{newHuman});
+        Request request = new Request(CommandType.ADD_IF_MAX, new Object[]{newHuman}, client.getCurrentUser());
         client.sendRequest(request);
 
         Response response = client.receiveResponse();

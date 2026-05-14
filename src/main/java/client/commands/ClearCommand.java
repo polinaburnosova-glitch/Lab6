@@ -10,7 +10,7 @@ public class ClearCommand implements Command {
 
     @Override
     public void execute(SimpleClient client, String argument) throws IOException, ClassNotFoundException {
-        Request request = new Request(CommandType.CLEAR, null);
+        Request request = new Request(CommandType.CLEAR, null, client.getCurrentUser());
         client.sendRequest(request);
 
         Response response = client.receiveResponse();

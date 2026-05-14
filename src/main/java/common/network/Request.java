@@ -2,6 +2,7 @@ package common.network;
 
 import java.io.Serializable;
 import java.util.Arrays;
+import common.model.User;
 
 /**
  * Класс, представляющий запрос от клиента к серверу.
@@ -48,9 +49,13 @@ public class Request implements Serializable {
      * @param commandType тип команды (не может быть null)
      * @param args массив аргументов команды (может быть null)
      */
-    public Request(CommandType commandType, Object[] args) {
+
+    private final User user;
+
+    public Request(CommandType commandType, Object[] args, User user) {
         this.commandType = commandType;
         this.args = args;
+        this.user = user;
     }
 
     /**
@@ -76,10 +81,14 @@ public class Request implements Serializable {
      *
      * @return строка с типом команды и аргументами
      */
+    public User getUser() { return user; }
+
     @Override
     public String toString() {
         return "Request(" +
                 "commandType=" + commandType +
-                ", args=" + Arrays.toString(args) + "}";
+                ", args=" + Arrays.toString(args) +
+                ", user=" + (user != null ? user.getUsername() : "null") +
+                "}";
     }
 }

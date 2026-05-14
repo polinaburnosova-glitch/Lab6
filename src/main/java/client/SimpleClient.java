@@ -1,6 +1,8 @@
 package client;
 
-import common.network.*;
+import common.model.User;
+import common.network.Request;
+import common.network.Response;
 import java.io.*;
 import java.net.Socket;
 import java.net.ConnectException;
@@ -39,6 +41,7 @@ public class SimpleClient {
     private static final int MAX_RECONNECT_ATTEMPTS = 3;
     /** Задержка между попытками переподключения в миллисекундах. */
     private static final int RECONNECT_DELAY_MS = 2000;
+    private User currentUser;
 
     /**
      * Конструктор клиента.
@@ -50,6 +53,15 @@ public class SimpleClient {
         this.host = host;
         this.port = port;
         this.connected = false;
+        this.currentUser = null;
+    }
+
+    public void setCurrentUser(User user) {
+        this.currentUser = user;
+    }
+
+    public User getCurrentUser() {
+        return currentUser;
     }
 
     /**
@@ -106,6 +118,15 @@ public class SimpleClient {
         if (!connected || socket == null || socket.isClosed()) {
             throw new IOException("Нет соединения с сервером");
         }
+
+        if (currentUser != null && request.getUser() == null) {
+            request = new Request(
+                    request.getCommandType(),
+                    request.getArgs(),
+                    currentUser
+            );
+        }
+
         outputStream.writeObject(request);
         outputStream.flush();
         outputStream.reset();

@@ -15,7 +15,7 @@ public class FilterBySoundtrackCommand implements Command {
             return;
         }
 
-        Request request = new Request(CommandType.FILTER_STARTS_WITH_SOUNDTRACK_NAME, new Object[]{argument});
+        Request request = new Request(CommandType.FILTER_STARTS_WITH_SOUNDTRACK_NAME, new Object[]{argument}, client.getCurrentUser());
         client.sendRequest(request);
 
         Response response = client.receiveResponse();

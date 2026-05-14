@@ -1,7 +1,5 @@
 package common.model;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import java.io.Serializable;
 
 /**
@@ -19,8 +17,7 @@ public class Car implements Serializable{
      * @param cool флаг "крутая ли машина" (не может быть null)
      * @throws IllegalArgumentException если cool равен null
      */
-    @JsonCreator
-    public Car(@JsonProperty("cool") Boolean cool) {
+    public Car(Boolean cool) {
         if (cool == null) {
             throw new IllegalArgumentException("Поле cool не может быть null");
         }

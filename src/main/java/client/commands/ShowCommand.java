@@ -10,7 +10,7 @@ public class ShowCommand implements Command {
 
     @Override
     public void execute(SimpleClient client, String argument) throws IOException, ClassNotFoundException {
-        Request request = new Request(CommandType.SHOW, null);
+        Request request = new Request(CommandType.SHOW, null, client.getCurrentUser());
         client.sendRequest(request);
 
         Response response = client.receiveResponse();

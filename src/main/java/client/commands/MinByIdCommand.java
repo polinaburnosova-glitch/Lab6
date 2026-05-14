@@ -10,7 +10,7 @@ public class MinByIdCommand implements Command {
 
     @Override
     public void execute(SimpleClient client, String argument) throws IOException, ClassNotFoundException {
-        Request request = new Request(CommandType.MIN_BY_ID, null);
+        Request request = new Request(CommandType.MIN_BY_ID, null, client.getCurrentUser());
         client.sendRequest(request);
 
         Response response = client.receiveResponse();

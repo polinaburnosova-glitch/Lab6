@@ -3,7 +3,18 @@ package common;
 import io.github.cdimascio.dotenv.Dotenv;
 import java.io.File;
 
+/**
+ * Загрузчик переменных окружения из файла .env.
+ *
+ * <p>Позволяет хранить конфигурацию (порт, хост, параметры БД) в отдельном файле,
+ * который не попадает в Git.</p>
+ *
+ * @author Полина
+ * @version 1.0
+ * @since 2026-04-20
+ */
 public class EnvLoader {
+
     private static Dotenv dotenv;
 
     static {
@@ -64,6 +75,28 @@ public class EnvLoader {
         if (value == null || value.isEmpty()) {
             return defaultValue;
         }
-        return value.equalsIgnoreCase("true") || value.equalsIgnoreCase("yes") || value.equals("1");
+        return value.equalsIgnoreCase("true") ||
+                value.equalsIgnoreCase("yes") ||
+                value.equals("1");
+    }
+
+    /**
+     * Возвращает строковое значение переменной (без значения по умолчанию).
+     *
+     * @param key имя переменной
+     * @return значение переменной или null
+     */
+    public static String get(String key) {
+        return dotenv.get(key);
+    }
+
+    /**
+     * Перезагружает файл .env.
+     */
+    public static void reload() {
+        dotenv = Dotenv.configure()
+                .directory(".")
+                .ignoreIfMissing()
+                .load();
     }
 }

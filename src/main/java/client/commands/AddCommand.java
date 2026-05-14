@@ -21,7 +21,7 @@ public class AddCommand implements Command {
         System.out.println("Введите данные для нового элемента:");
         HumanBeing newHuman = inputReader.readHumanBeing();
 
-        Request request = new Request(CommandType.ADD, new Object[]{newHuman});
+        Request request = new Request(CommandType.ADD, new Object[]{newHuman}, client.getCurrentUser());
         client.sendRequest(request);
 
         Response response = client.receiveResponse();

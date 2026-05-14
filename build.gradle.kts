@@ -2,7 +2,7 @@ plugins {
     java
 }
 
-group = "com.lab6"
+group = "com.lab7"
 version = "1.0-SNAPSHOT"
 
 repositories {
@@ -10,13 +10,8 @@ repositories {
 }
 
 dependencies {
-    implementation("com.fasterxml.jackson.core:jackson-core:2.17.2")
-    implementation("com.fasterxml.jackson.core:jackson-annotations:2.17.2")
-    implementation("com.fasterxml.jackson.core:jackson-databind:2.17.2")
-    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.17.2")
-    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.17.2")
-    implementation("com.fasterxml.woodstox:woodstox-core:6.5.1")
     implementation("io.github.cdimascio:dotenv-java:3.0.0")
+    implementation("org.postgresql:postgresql:42.7.3")
 }
 
 tasks.withType<JavaCompile> {
@@ -25,18 +20,17 @@ tasks.withType<JavaCompile> {
 
 tasks.withType<Javadoc> {
     options.encoding = "UTF-8"
-    options {
-        this as StandardJavadocDocletOptions
-        charSet = "UTF-8"
-        docEncoding = "UTF-8"
-        addStringOption("Xdoclint:none", "-quiet")
+    (options as? StandardJavadocDocletOptions)?.let {
+        it.charSet = "UTF-8"
+        it.docEncoding = "UTF-8"
+        it.addStringOption("Xdoclint:none", "-quiet")
     }
     isFailOnError = false
 }
 
 tasks.jar {
     manifest {
-        attributes["Main-Class"] = "server.ServerMain"
+        attributes["Main-Class"] to "server.ServerMain"
     }
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from(sourceSets.main.get().output)

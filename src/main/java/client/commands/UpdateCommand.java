@@ -28,7 +28,7 @@ public class UpdateCommand implements Command {
             System.out.println("Введите новые данные для элемента с ID " + id + ":");
             HumanBeing updatedHuman = inputReader.readHumanBeing();
 
-            Request request = new Request(CommandType.UPDATE, new Object[]{id, updatedHuman});
+            Request request = new Request(CommandType.UPDATE, new Object[]{id, updatedHuman}, client.getCurrentUser());
             client.sendRequest(request);
 
             Response response = client.receiveResponse();

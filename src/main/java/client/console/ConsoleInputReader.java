@@ -40,7 +40,7 @@ public class ConsoleInputReader implements InputReader {
 
         System.out.println("Элемент успешно создан");
         return new HumanBeing(name, coordinates, realHero, hasToothpick,
-                impactSpeed, soundtrackName, weaponType, mood, car);
+                impactSpeed, soundtrackName, weaponType, mood, car, null);
     }
 
     /**

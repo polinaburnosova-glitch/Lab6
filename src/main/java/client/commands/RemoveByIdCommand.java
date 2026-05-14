@@ -17,7 +17,7 @@ public class RemoveByIdCommand implements Command {
 
         try {
             long id = Long.parseLong(argument);
-            Request request = new Request(CommandType.REMOVE_BY_ID, new Object[]{id});
+            Request request = new Request(CommandType.REMOVE_BY_ID, new Object[]{id}, client.getCurrentUser());
             client.sendRequest(request);
 
             Response response = client.receiveResponse();

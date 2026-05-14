@@ -8,5 +8,7 @@ public enum ResponseStatus implements Serializable {
     VALIDATION_ERROR,
     SERVER_ERROR,
     UNKNOWN_COMMAND,
-    WARNING;
+    WARNING,
+    UNAUTHORIZED,
+    FORBIDDEN;
 }

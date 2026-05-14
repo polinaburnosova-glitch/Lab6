@@ -10,7 +10,7 @@ public class HelpCommand implements Command {
 
     @Override
     public void execute(SimpleClient client, String argument) throws IOException, ClassNotFoundException {
-        Request request = new Request(CommandType.HELP, null);
+        Request request = new Request(CommandType.HELP, null, client.getCurrentUser());
         client.sendRequest(request);
 
         Response response = client.receiveResponse();

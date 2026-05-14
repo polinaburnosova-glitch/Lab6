@@ -1,9 +1,9 @@
 package client.script;
 
-import common.EnvLoader;
 import common.model.*;
 import common.network.CommandType;
 import common.network.Request;
+import common.EnvLoader;
 
 public class ScriptCommandParser {
 
@@ -38,7 +38,7 @@ public class ScriptCommandParser {
             case "CLEAR":
             case "REMOVE_FIRST":
             case "EXIT":
-                return new Request(CommandType.valueOf(command), null);
+                return new Request(CommandType.valueOf(command), null, null);
 
             default:
                 throw new IllegalArgumentException("Неизвестная команда: " + command);
@@ -70,10 +70,10 @@ public class ScriptCommandParser {
         Coordinates coordinates = new Coordinates(x, y);
         Car car = new Car(carCool);
         HumanBeing human = new HumanBeing(name, coordinates, realHero, hasToothpick,
-                impactSpeed, soundtrackName, weaponType, mood, car);
+                impactSpeed, soundtrackName, weaponType, mood, car, null);
 
         CommandType cmdType = CommandType.valueOf(command);
-        return new Request(cmdType, new Object[]{human});
+        return new Request(cmdType, new Object[]{human}, null);
     }
 
     private static Request parseUpdateCommand(String argument) {
@@ -102,9 +102,9 @@ public class ScriptCommandParser {
         Coordinates coordinates = new Coordinates(x, y);
         Car car = new Car(carCool);
         HumanBeing human = new HumanBeing(name, coordinates, realHero, hasToothpick,
-                impactSpeed, soundtrackName, weaponType, mood, car);
+                impactSpeed, soundtrackName, weaponType, mood, car, null);
 
-        return new Request(CommandType.UPDATE, new Object[]{id, human});
+        return new Request(CommandType.UPDATE, new Object[]{id, human}, null);
     }
 
     private static Request parseRemoveByIdCommand(String argument) {
@@ -112,7 +112,7 @@ public class ScriptCommandParser {
             throw new IllegalArgumentException("Не указан ID");
         }
         long id = Long.parseLong(argument.trim());
-        return new Request(CommandType.REMOVE_BY_ID, new Object[]{id});
+        return new Request(CommandType.REMOVE_BY_ID, new Object[]{id}, null);
     }
 
     private static Request parseFilterByMoodCommand(String argument) {
@@ -120,13 +120,13 @@ public class ScriptCommandParser {
             throw new IllegalArgumentException("Не указано настроение");
         }
         Mood mood = Mood.valueOf(argument.trim().toUpperCase());
-        return new Request(CommandType.FILTER_BY_MOOD, new Object[]{mood});
+        return new Request(CommandType.FILTER_BY_MOOD, new Object[]{mood}, null);
     }
 
     private static Request parseFilterBySoundtrackCommand(String argument) {
         if (argument == null) {
             throw new IllegalArgumentException("Не указана подстрока");
         }
-        return new Request(CommandType.FILTER_STARTS_WITH_SOUNDTRACK_NAME, new Object[]{argument.trim()});
+        return new Request(CommandType.FILTER_STARTS_WITH_SOUNDTRACK_NAME, new Object[]{argument.trim()}, null);
     }
 }

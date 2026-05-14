@@ -1,27 +1,39 @@
 package server;
 
-import common.network.*;
-import server.manager.CollectionManager;
-import server.manager.FileManager;
 import common.model.HumanBeing;
 import common.model.Mood;
+import common.model.User;
+import common.network.*;
+import server.database.UserDAO;
+import server.manager.CollectionManager;
+
+import java.util.Deque;
 
 public class CommandExecutor {
 
     private final CollectionManager collectionManager;
-    private final FileManager fileManager;
 
-    public CommandExecutor(CollectionManager collectionManager, FileManager fileManager) {
+    public CommandExecutor(CollectionManager collectionManager) {
         this.collectionManager = collectionManager;
-        this.fileManager = fileManager;
     }
 
     public Response execute(Request request) {
         CommandType type = request.getCommandType();
         Object[] args = request.getArgs();
+        User user = request.getUser();
+
+        if (user == null && type != CommandType.LOGIN && type != CommandType.REGISTER) {
+            return new Response(ResponseStatus.UNAUTHORIZED, "Необходимо авторизоваться");
+        }
 
         try {
             switch (type) {
+                case LOGIN:
+                    return handleLogin(args);
+
+                case REGISTER:
+                    return handleRegister(args);
+
                 case INFO:
                     return ok(collectionManager.info());
 
@@ -40,21 +52,34 @@ public class CommandExecutor {
                     if (newHuman == null) {
                         return validationError("не указан объект для добавления");
                     }
-                    return ok(collectionManager.add(newHuman));
+                    boolean added = collectionManager.add(newHuman, user.getUsername());
+                    if (added) {
+                        return ok("Добавлен элемент с ID: " + newHuman.getId());
+                    } else {
+                        return serverError("Ошибка сохранения в БД");
+                    }
 
                 case ADD_IF_MIN:
                     HumanBeing minHuman = getArg(args, 0, HumanBeing.class);
                     if (minHuman == null) {
                         return validationError("не указан объект для добавления");
                     }
-                    return handleAddResult(collectionManager.addIfMin(minHuman));
+                    String minResult = collectionManager.addIfMin(minHuman, user.getUsername());
+                    if (minResult.contains("не добавлен")) {
+                        return warning(minResult);
+                    }
+                    return ok(minResult);
 
                 case ADD_IF_MAX:
                     HumanBeing maxHuman = getArg(args, 0, HumanBeing.class);
                     if (maxHuman == null) {
                         return validationError("не указан объект для добавления");
                     }
-                    return handleAddResult(collectionManager.addIfMax(maxHuman));
+                    String maxResult = collectionManager.addIfMax(maxHuman, user.getUsername());
+                    if (maxResult.contains("не добавлен")) {
+                        return warning(maxResult);
+                    }
+                    return ok(maxResult);
 
                 case MIN_BY_ID:
                     return ok(collectionManager.minById());
@@ -64,10 +89,15 @@ public class CommandExecutor {
                     if (idToRemove == null) {
                         return validationError("не указан id для удаления");
                     }
-                    return handleRemoveResult(collectionManager.removeById(idToRemove));
+                    boolean deleted = collectionManager.removeById(idToRemove, user.getUsername());
+                    if (deleted) {
+                        return ok("Элемент с ID " + idToRemove + " удалён");
+                    } else {
+                        return notFound("Элемент с ID " + idToRemove + " не найден");
+                    }
 
                 case CLEAR:
-                    return ok(collectionManager.clear());
+                    return ok(collectionManager.clear(user.getUsername()));
 
                 case REMOVE_FIRST:
                     return ok(collectionManager.removeFirst());
@@ -78,21 +108,42 @@ public class CommandExecutor {
                     if (updateId == null || updateHuman == null) {
                         return validationError("не указан id или объект для обновления");
                     }
-                    return handleUpdateResult(collectionManager.update(updateId, updateHuman));
+                    boolean updated = collectionManager.update(updateId, updateHuman, user.getUsername());
+                    if (updated) {
+                        return ok("Элемент с ID " + updateId + " успешно обновлён");
+                    } else {
+                        return notFound("Элемент с ID " + updateId + " не найден");
+                    }
 
                 case FILTER_BY_MOOD:
                     Mood mood = getArg(args, 0, Mood.class);
                     if (mood == null) {
                         return validationError("не указано настроение для фильтрации");
                     }
-                    return ok(collectionManager.filterByMood(mood));
+                    Deque<HumanBeing> filteredByMood = collectionManager.filterByMood(mood);
+                    if (filteredByMood.isEmpty()) {
+                        return ok("Нет элементов с настроением " + mood);
+                    }
+                    StringBuilder moodResult = new StringBuilder();
+                    for (HumanBeing h : filteredByMood) {
+                        moodResult.append(h).append("\n\n");
+                    }
+                    return ok(moodResult.toString().trim());
 
                 case FILTER_STARTS_WITH_SOUNDTRACK_NAME:
                     String prefix = getArg(args, 0, String.class);
                     if (prefix == null) {
                         return validationError("не указана подстрока для фильтрации");
                     }
-                    return ok(collectionManager.filterStartsWithSoundtrackName(prefix));
+                    Deque<HumanBeing> filteredBySoundtrack = collectionManager.filterBySoundtrack(prefix);
+                    if (filteredBySoundtrack.isEmpty()) {
+                        return ok("Нет элементов с саундтреком, начинающимся на '" + prefix + "'");
+                    }
+                    StringBuilder soundtrackResult = new StringBuilder();
+                    for (HumanBeing h : filteredBySoundtrack) {
+                        soundtrackResult.append(h).append("\n\n");
+                    }
+                    return ok(soundtrackResult.toString().trim());
 
                 case EXECUTE_SCRIPT:
                     return ok("Команда выполнена");
@@ -105,15 +156,37 @@ public class CommandExecutor {
         }
     }
 
-    public String save() {
-        try {
-            fileManager.saveCollection(collectionManager.getCollection());
-            return "Коллекция сохранена в файл";
-        } catch (Exception e) {
-            return "Ошибка сохранения: " + e.getMessage();
+    private Response handleLogin(Object[] args) {
+        if (args == null || args.length < 2) {
+            return validationError("Не указан логин или пароль");
         }
+        String username = (String) args[0];
+        String password = (String) args[1];
+
+        User user = UserDAO.login(username, password);
+        if (user == null) {
+            return new Response(ResponseStatus.UNAUTHORIZED, "Неверный логин или пароль");
+        }
+        return new Response(ResponseStatus.OK, "Авторизация успешна", null);
     }
 
+    private Response handleRegister(Object[] args) {
+        if (args == null || args.length < 2) {
+            return validationError("Не указан логин или пароль");
+        }
+        String username = (String) args[0];
+        String password = (String) args[1];
+
+        if (UserDAO.userExists(username)) {
+            return new Response(ResponseStatus.VALIDATION_ERROR, "Пользователь уже существует");
+        }
+
+        boolean registered = UserDAO.register(username, password);
+        if (!registered) {
+            return new Response(ResponseStatus.SERVER_ERROR, "Ошибка регистрации");
+        }
+        return ok("Регистрация успешна. Теперь войдите через LOGIN");
+    }
 
     @SuppressWarnings("unchecked")
     private <T> T getArg(Object[] args, int index, Class<T> type) {
@@ -122,29 +195,6 @@ public class CommandExecutor {
         }
         return null;
     }
-
-
-    private Response handleAddResult(String result) {
-        if (result.contains("не добавлен")) {
-            return warning(result);
-        }
-        return ok(result);
-    }
-
-    private Response handleRemoveResult(String result) {
-        if (result.contains("не найден")) {
-            return notFound(result);
-        }
-        return ok(result);
-    }
-
-    private Response handleUpdateResult(String result) {
-        if (result.contains("не найден")) {
-            return notFound(result);
-        }
-        return ok(result);
-    }
-
 
     private Response ok(String message) {
         return new Response(ResponseStatus.OK, message);

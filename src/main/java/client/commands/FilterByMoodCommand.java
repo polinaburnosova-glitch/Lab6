@@ -18,7 +18,7 @@ public class FilterByMoodCommand implements Command {
 
         try {
             Mood mood = Mood.valueOf(argument.toUpperCase());
-            Request request = new Request(CommandType.FILTER_BY_MOOD, new Object[]{mood});
+            Request request = new Request(CommandType.FILTER_BY_MOOD, new Object[]{mood}, client.getCurrentUser());
             client.sendRequest(request);
 
             Response response = client.receiveResponse();

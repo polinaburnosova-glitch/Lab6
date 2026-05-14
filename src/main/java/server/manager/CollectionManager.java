@@ -1,356 +1,437 @@
 package server.manager;
 
 import common.model.HumanBeing;
-import java.io.Serializable;
-import java.time.LocalDateTime;
-import java.util.*;
-import java.util.stream.Collectors;
 import common.model.Mood;
+import server.database.HumanBeingDAO;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.stream.Collectors;
 
 /**
  * Менеджер коллекции объектов HumanBeing на сервере.
  *
  * <p>Обеспечивает хранение, управление и операции над коллекцией объектов
  * HumanBeing. Коллекция реализована как {@link ArrayDeque} для эффективного
- * доступа к первому и последнему элементам. Все операции над коллекцией
- * выполняются с использованием Stream API и лямбда-выражений.</p>
+ * доступа к первому и последнему элементам.</p>
  *
- * <p>Класс также управляет генерацией уникальных ID для новых элементов
- * и предоставляет методы для выполнения всех команд, поддерживаемых
- * приложением.</p>
+ * <p>Все операции над коллекцией синхронизированы с помощью {@link ReentrantReadWriteLock}
+ * для потокобезопасного доступа.</p>
  *
  * @author Полина
- * @version 1.0
- * @since 2026-04-20
- * @see HumanBeing
- * @see common.model.Mood
+ * @version 2.0
+ * @since 2026-05-14
  */
-public class CollectionManager implements Serializable {
+public class CollectionManager {
 
-    /** Версия для сериализации. */
-    private static final long serialVersionUID = 1L;
+    private final Deque<HumanBeing> collection = new ArrayDeque<>();
+    private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
-    /** Коллекция объектов HumanBeing (двусторонняя очередь). */
-    private final Deque<HumanBeing> collection;
-
-    /** Дата и время инициализации менеджера коллекции. */
-    private final LocalDateTime initializationDate;
-
-    /** Следующий доступный ID для новых элементов. */
-    private long nextId = 1;
 
     /**
-     * Конструктор менеджера коллекции.
-     * Создаёт пустую коллекцию и фиксирует время инициализации.
+     * Загружает все объекты из базы данных в коллекцию в памяти.
+     * Вызывается при старте сервера.
      */
-    public CollectionManager() {
-        this.collection = new ArrayDeque<>();
-        this.initializationDate = LocalDateTime.now();
+    public void loadFromDatabase() {
+        lock.writeLock().lock();
+        try {
+            collection.clear();
+            collection.addAll(HumanBeingDAO.loadAll());
+            System.out.println("Загружено " + collection.size() + " объектов из БД");
+        } finally {
+            lock.writeLock().unlock();
+        }
     }
 
+
     /**
-     * Инициализирует коллекцию загруженными из файла данными.
+     * Добавляет новый объект в коллекцию.
      *
-     * @param loadedCollection загруженная коллекция (может быть null или пустой)
+     * @param human объект для добавления
+     * @param ownerUsername имя владельца
+     * @return true если добавление успешно, false иначе
      */
-    public void initializeCollection(Deque<HumanBeing> loadedCollection) {
-        if (loadedCollection != null && !loadedCollection.isEmpty()) {
-            collection.clear();
-            collection.addAll(loadedCollection);
-            nextId = collection.stream()
-                    .mapToLong(HumanBeing::getId)
-                    .max()
-                    .orElse(0) + 1;
+    public boolean add(HumanBeing human, String ownerUsername) {
+        boolean saved = HumanBeingDAO.save(human, ownerUsername);
+        if (!saved) return false;
+
+        lock.writeLock().lock();
+        try {
+            collection.add(human);
+            return true;
+        } finally {
+            lock.writeLock().unlock();
         }
     }
 
     /**
-     * Возвращает отсортированную копию коллекции.
+     * Обновляет существующий объект в коллекции.
      *
-     * @return отсортированная по умолчанию (по ID) коллекция
+     * @param human объект с новыми данными
+     * @param ownerUsername имя владельца
+     * @return true если обновление успешно, false иначе
+     */
+    public boolean update(HumanBeing human, String ownerUsername) {
+        if (!HumanBeingDAO.existsAndOwnedBy(human.getId(), ownerUsername)) {
+            return false;
+        }
+
+        boolean updated = HumanBeingDAO.update(human, ownerUsername);
+        if (!updated) return false;
+
+        lock.writeLock().lock();
+        try {
+            collection.removeIf(h -> h.getId().equals(human.getId()));
+            collection.add(human);
+            return true;
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    /**
+     * Удаляет объект по ID.
+     *
+     * @param id ID удаляемого объекта
+     * @param ownerUsername имя владельца
+     * @return true если удаление успешно, false иначе
+     */
+    public boolean removeById(long id, String ownerUsername) {
+        if (!HumanBeingDAO.existsAndOwnedBy(id, ownerUsername)) {
+            return false;
+        }
+
+        boolean deleted = HumanBeingDAO.delete(id, ownerUsername);
+        if (!deleted) return false;
+
+        lock.writeLock().lock();
+        try {
+            collection.removeIf(h -> h.getId() == id);
+            return true;
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    /**
+     * Удаляет все объекты, принадлежащие указанному пользователю.
+     *
+     * @param ownerUsername имя владельца
+     */
+    public void clearByOwner(String ownerUsername) {
+        lock.writeLock().lock();
+        try {
+            collection.removeIf(h -> h.getOwner().equals(ownerUsername));
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+
+    /**
+     * Возвращает копию коллекции.
+     *
+     * @return копия коллекции
      */
     public Deque<HumanBeing> getCollection() {
-        return collection.stream()
-                .sorted()
-                .collect(Collectors.toCollection(ArrayDeque::new));
+        lock.readLock().lock();
+        try {
+            return new ArrayDeque<>(collection);
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     /**
-     * Возвращает тип коллекции.
+     * Возвращает размер коллекции.
      *
-     * @return имя класса коллекции
-     */
-    public String getCollectionType() {
-        return collection.getClass().getName();
-    }
-
-    /**
-     * Возвращает дату инициализации коллекции.
-     *
-     * @return дата создания менеджера коллекции
-     */
-    public LocalDateTime getInitializationDate() {
-        return initializationDate;
-    }
-
-    /**
-     * Возвращает количество элементов в коллекции.
-     *
-     * @return размер коллекции
+     * @return количество элементов в коллекции
      */
     public int size() {
-        return collection.size();
-    }
-
-    /**
-     * Возвращает информацию о коллекции.
-     *
-     * @return строка с типом коллекции, датой инициализации и количеством элементов
-     */
-    public String info() {
-        return "Тип коллекции: " + getCollectionType() +
-                "\nДата инициализации: " + initializationDate +
-                "\nКоличество элементов: " + size();
-    }
-
-    /**
-     * Возвращает строковое представление всех элементов коллекции.
-     *
-     * @return строка со всеми элементами в отсортированном порядке
-     */
-    public String show() {
-        if (collection.isEmpty()) {
-            return "Коллекция пуста";
-        }
-        return collection.stream()
-                .sorted()
-                .map(HumanBeing::toString)
-                .collect(Collectors.joining("\n\n"));
-    }
-
-    /**
-     * Возвращает справку по всем доступным командам.
-     *
-     * @return строка со списком команд и их описанием
-     */
-    public String help() {
-        return "Доступные команды:\n" +
-                "  help - показать справку\n" +
-                "  info - информация о коллекции\n" +
-                "  show - показать все элементы\n" +
-                "  exit - завершить работу клиента\n" +
-                "  add - добавить новый элемент\n" +
-                "  add_if_min - добавить элемент, если его impactSpeed МИНИМАЛЬНЫЙ\n" +
-                "  add_if_max - добавить элемент, если его impactSpeed МАКСИМАЛЬНЫЙ\n" +
-                "  min_by_id - показать элемент с минимальным ID\n" +
-                "  remove_by_id <id> - удалить элемент по ID\n" +
-                "  clear - очистить коллекцию\n" +
-                "  remove_first - удалить первый элемент из коллекции\n" +
-                "  update <id> - обновить элемент с указанным ID\n" +
-                "  filter_by_mood <mood> - вывести элементы с указанным настроением\n" +
-                "  filter_starts_with_soundtrack_name <prefix> - вывести элементы, название саундтрека которых начинается с указанной подстроки\n" +
-                "  execute_script <file> - выполнить скрипт из файла\n" +
-                "  save - сохранить коллекцию (только на сервере)";
-    }
-
-    /**
-     * Добавляет новый элемент в коллекцию.
-     *
-     * @param humanBeing объект HumanBeing для добавления
-     * @return сообщение о результате добавления
-     */
-    public String add(HumanBeing humanBeing) {
-        HumanBeing newHuman = new HumanBeing(
-                nextId++,
-                LocalDateTime.now(),
-                humanBeing.getName(),
-                humanBeing.getCoordinates(),
-                humanBeing.getRealHero(),
-                humanBeing.getHasToothpick(),
-                humanBeing.getImpactSpeed(),
-                humanBeing.getSoundtrackName(),
-                humanBeing.getWeaponType(),
-                humanBeing.getMood(),
-                humanBeing.getCar()
-        );
-        collection.add(newHuman);
-        return "Добавлен новый элемент, ID: " + newHuman.getId() + ", impactSpeed: " + newHuman.getImpactSpeed();
-    }
-
-    /**
-     * Добавляет элемент, если его impactSpeed больше максимального в коллекции.
-     *
-     * @param humanBeing объект HumanBeing для добавления
-     * @return сообщение о результате добавления
-     */
-    public String addIfMax(HumanBeing humanBeing) {
-        Optional<HumanBeing> maxElement = collection.stream()
-                .max(Comparator.comparingDouble(HumanBeing::getImpactSpeed));
-
-        if (maxElement.isEmpty()) {
-            return add(humanBeing);
-        }
-
-        if (humanBeing.getImpactSpeed() > maxElement.get().getImpactSpeed()) {
-            return add(humanBeing);
-        } else {
-            return String.format("Элемент не добавлен. impactSpeed (%.1f) не больше максимального (%.1f)",
-                    humanBeing.getImpactSpeed(), maxElement.get().getImpactSpeed());
+        lock.readLock().lock();
+        try {
+            return collection.size();
+        } finally {
+            lock.readLock().unlock();
         }
     }
 
     /**
-     * Добавляет элемент, если его impactSpeed меньше минимального в коллекции.
+     * Проверяет, пуста ли коллекция.
      *
-     * @param humanBeing объект HumanBeing для добавления
-     * @return сообщение о результате добавления
+     * @return true если коллекция пуста, false иначе
      */
-    public String addIfMin(HumanBeing humanBeing) {
-        Optional<HumanBeing> minElement = collection.stream()
-                .min(Comparator.comparingDouble(HumanBeing::getImpactSpeed));
-
-        if (minElement.isEmpty()) {
-            return add(humanBeing);
-        }
-
-        if (humanBeing.getImpactSpeed() < minElement.get().getImpactSpeed()) {
-            return add(humanBeing);
-        } else {
-            return String.format("Элемент не добавлен. impactSpeed (%.1f) не меньше минимального (%.1f)",
-                    humanBeing.getImpactSpeed(), minElement.get().getImpactSpeed());
+    public boolean isEmpty() {
+        lock.readLock().lock();
+        try {
+            return collection.isEmpty();
+        } finally {
+            lock.readLock().unlock();
         }
     }
 
     /**
      * Находит элемент с минимальным ID.
      *
-     * @return строковое представление элемента с минимальным ID
+     * @return элемент с минимальным ID или null, если коллекция пуста
      */
-    public String minById() {
-        return collection.stream()
-                .min((h1, h2) -> h1.getId().compareTo(h2.getId()))
-                .map(h -> "Элемент с минимальным ID (" + h.getId() + "):\n" + h.toString())
-                .orElse("Коллекция пуста");
-    }
-
-    /**
-     * Удаляет элемент по ID.
-     *
-     * @param id идентификатор элемента для удаления
-     * @return сообщение о результате удаления
-     */
-    public String removeById(Long id) {
-        boolean removed = collection.removeIf(h -> h.getId().equals(id));
-
-        if (removed) {
-            return "Элемент с id " + id + " успешно удален";
-        }
-        else {
-            return "Элемент с id " + id + " не найден";
+    public HumanBeing findMinById() {
+        lock.readLock().lock();
+        try {
+            return collection.stream()
+                    .min(HumanBeing::compareTo)
+                    .orElse(null);
+        } finally {
+            lock.readLock().unlock();
         }
     }
 
     /**
-     * Очищает всю коллекцию и сбрасывает счётчик ID.
+     * Проверяет, является ли impactSpeed минимальным в коллекции.
      *
-     * @return сообщение о результате очистки
+     * @param impactSpeed проверяемое значение
+     * @return true если значение минимальное, false иначе
      */
-    public String clear() {
-        int size = collection.size();
-        collection.clear();
-        nextId = 1;
-        return "Коллекция очищена. Удалено элементов: " + size;
-    }
-
-    /**
-     * Удаляет первый элемент коллекции.
-     *
-     * @return сообщение о результате удаления
-     */
-    public String removeFirst() {
-        if (collection.isEmpty()) {
-            return "Коллекция пуста. Нечего удалять.";
+    public boolean isImpactSpeedMin(float impactSpeed) {
+        lock.readLock().lock();
+        try {
+            return collection.stream()
+                    .mapToDouble(HumanBeing::getImpactSpeed)
+                    .min()
+                    .orElse(Double.MAX_VALUE) >= impactSpeed;
+        } finally {
+            lock.readLock().unlock();
         }
-        HumanBeing removed = collection.removeFirst();
-        return "Удален первый элемент:\n" + removed.toString();
     }
 
     /**
-     * Обновляет существующий элемент по ID.
+     * Проверяет, является ли impactSpeed максимальным в коллекции.
      *
-     * @param id идентификатор элемента для обновления
-     * @param newHuman новый объект HumanBeing с обновлёнными данными
-     * @return сообщение о результате обновления
+     * @param impactSpeed проверяемое значение
+     * @return true если значение максимальное, false иначе
      */
-    public String update(Long id, HumanBeing newHuman) {
-        Optional<HumanBeing> existing = collection.stream()
-                .filter(h -> h.getId().equals(id))
-                .findFirst();
-        if (existing.isEmpty()) {
-            return "Элемент с ID " + id + " не найден";
+    public boolean isImpactSpeedMax(float impactSpeed) {
+        lock.readLock().lock();
+        try {
+            return collection.stream()
+                    .mapToDouble(HumanBeing::getImpactSpeed)
+                    .max()
+                    .orElse(-Double.MAX_VALUE) <= impactSpeed;
+        } finally {
+            lock.readLock().unlock();
         }
-
-        collection.remove(existing.get());
-
-        HumanBeing updated = new HumanBeing(
-                id,
-                existing.get().getCreationDate(),
-                newHuman.getName(),
-                newHuman.getCoordinates(),
-                newHuman.getRealHero(),
-                newHuman.getHasToothpick(),
-                newHuman.getImpactSpeed(),
-                newHuman.getSoundtrackName(),
-                newHuman.getWeaponType(),
-                newHuman.getMood(),
-                newHuman.getCar()
-        );
-
-        collection.add(updated);
-        return "Элемент с ID " + id + " успешно обновлен";
     }
 
     /**
-     * Фильтрует элементы коллекции по настроению.
+     * Проверяет, существует ли объект с указанным ID и принадлежит ли он пользователю.
+     *
+     * @param id ID объекта
+     * @param ownerUsername имя владельца
+     * @return true если объект существует и принадлежит пользователю
+     */
+    public boolean existsAndOwnedBy(long id, String ownerUsername) {
+        lock.readLock().lock();
+        try {
+            return collection.stream()
+                    .anyMatch(h -> h.getId() == id && h.getOwner().equals(ownerUsername));
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    /**
+     * Возвращает первый элемент, принадлежащий указанному пользователю.
+     *
+     * @param ownerUsername имя владельца
+     * @return первый элемент пользователя или null
+     */
+    public HumanBeing getFirstOwnedBy(String ownerUsername) {
+        lock.readLock().lock();
+        try {
+            return collection.stream()
+                    .filter(h -> h.getOwner().equals(ownerUsername))
+                    .findFirst()
+                    .orElse(null);
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    /**
+     * Фильтрует коллекцию по настроению.
      *
      * @param mood настроение для фильтрации
-     * @return строковое представление отфильтрованных элементов
+     * @return отфильтрованная коллекция
      */
-    public String filterByMood(Mood mood) {
-        List<HumanBeing> filtered = new ArrayList<>();
-        collection.stream()
-                .filter(h -> h.getMood() == mood)
-                .sorted()
-                .forEach(filtered::add);
-
-        if (filtered.isEmpty()) {
-            return "Элементы с настроением " + mood + " не найдены";
+    public Deque<HumanBeing> filterByMood(Mood mood) {
+        lock.readLock().lock();
+        try {
+            return collection.stream()
+                    .filter(h -> h.getMood() == mood)
+                    .sorted()
+                    .collect(Collectors.toCollection(ArrayDeque::new));
+        } finally {
+            lock.readLock().unlock();
         }
-
-        StringBuilder sb = new StringBuilder();
-        for (HumanBeing h : filtered) {
-            sb.append(h.toString()).append("\n\n");
-        }
-        return sb.toString().trim();
     }
 
     /**
-     * Фильтрует элементы по префиксу названия саундтрека.
+     * Фильтрует коллекцию по префиксу названия саундтрека.
      *
-     * @param prefix префикс для поиска в названии саундтрека
-     * @return строковое представление отфильтрованных элементов
+     * @param prefix префикс для фильтрации
+     * @return отфильтрованная коллекция
      */
-    public String filterStartsWithSoundtrackName(String prefix) {
-        StringBuilder result = new StringBuilder();
-
-        collection.stream()
-                .filter(h -> h.getSoundtrackName().startsWith(prefix))
-                .sorted()
-                .forEach(h -> result.append(h.toString()).append("\n\n"));
-        if (result.length() == 0) {
-            return "Элементы, название саундтрека которых начинается с '" + prefix + "', не найдены";
+    public Deque<HumanBeing> filterBySoundtrack(String prefix) {
+        lock.readLock().lock();
+        try {
+            return collection.stream()
+                    .filter(h -> h.getSoundtrackName().startsWith(prefix))
+                    .sorted()
+                    .collect(Collectors.toCollection(ArrayDeque::new));
+        } finally {
+            lock.readLock().unlock();
         }
+    }
 
-        return result.toString().trim();
+    /**
+     * Возвращает информацию о коллекции.
+     *
+     * @return строка с информацией
+     */
+    public String info() {
+        lock.readLock().lock();
+        try {
+            return "Тип коллекции: " + collection.getClass().getName() +
+                    "\nКоличество элементов: " + collection.size();
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    /**
+     * Возвращает строковое представление всех элементов коллекции.
+     *
+     * @return строка со всеми элементами
+     */
+    public String show() {
+        lock.readLock().lock();
+        try {
+            if (collection.isEmpty()) {
+                return "Коллекция пуста";
+            }
+            return collection.stream()
+                    .sorted()
+                    .map(HumanBeing::toString)
+                    .collect(Collectors.joining("\n\n"));
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    /**
+     * Возвращает справку по командам.
+     *
+     * @return строка со справкой
+     */
+    public String help() {
+        return "Доступные команды:\n" +
+                "  help - показать справку\n" +
+                "  info - информация о коллекции\n" +
+                "  show - показать все элементы\n" +
+                "  add - добавить новый элемент\n" +
+                "  add_if_min - добавить элемент, если его impactSpeed минимальный\n" +
+                "  add_if_max - добавить элемент, если его impactSpeed максимальный\n" +
+                "  min_by_id - показать элемент с минимальным ID\n" +
+                "  remove_by_id <id> - удалить элемент по ID\n" +
+                "  clear - очистить коллекцию (только свои элементы)\n" +
+                "  remove_first - удалить первый элемент\n" +
+                "  update <id> - обновить элемент\n" +
+                "  filter_by_mood <mood> - фильтр по настроению\n" +
+                "  filter_starts_with_soundtrack_name <prefix> - фильтр по саундтреку\n" +
+                "  execute_script <file> - выполнить скрипт\n" +
+                "  exit - завершить работу клиента";
+    }
+
+    /**
+     * Возвращает элемент с минимальным ID в виде строки.
+     *
+     * @return строка с элементом
+     */
+    public String minById() {
+        HumanBeing min = findMinById();
+        if (min == null) {
+            return "Коллекция пуста";
+        }
+        return "Элемент с минимальным ID (" + min.getId() + "):\n" + min;
+    }
+
+
+    /**
+     * Удаляет первый элемент в коллекции.
+     *
+     * @return сообщение о результате
+     */
+    public String removeFirst() {
+        lock.writeLock().lock();
+        try {
+            if (collection.isEmpty()) {
+                return "Коллекция пуста";
+            }
+            HumanBeing removed = collection.removeFirst();
+            return "Удалён первый элемент:\n" + removed;
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+
+    public String addIfMin(HumanBeing human, String ownerUsername) {
+        if (isImpactSpeedMin(human.getImpactSpeed())) {
+            boolean added = add(human, ownerUsername);
+            if (added) {
+                return "Добавлен элемент с минимальным impactSpeed, ID: " + human.getId();
+            }
+            return "Ошибка при добавлении элемента";
+        }
+        return "Элемент не добавлен: impactSpeed не является минимальным";
+    }
+
+    public String addIfMax(HumanBeing human, String ownerUsername) {
+        if (isImpactSpeedMax(human.getImpactSpeed())) {
+            boolean added = add(human, ownerUsername);
+            if (added) {
+                return "Добавлен элемент с максимальным impactSpeed, ID: " + human.getId();
+            }
+            return "Ошибка при добавлении элемента";
+        }
+        return "Элемент не добавлен: impactSpeed не является максимальным";
+    }
+
+    public String clear(String ownerUsername) {
+        lock.writeLock().lock();
+        try {
+            int removed = (int) collection.stream()
+                    .filter(h -> h.getOwner().equals(ownerUsername))
+                    .count();
+            collection.removeIf(h -> h.getOwner().equals(ownerUsername));
+            return "Удалено элементов: " + removed;
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    public boolean update(long id, HumanBeing human, String ownerUsername) {
+        if (!existsAndOwnedBy(id, ownerUsername)) {
+            return false;
+        }
+        human.setId(id);
+        lock.writeLock().lock();
+        try {
+            collection.removeIf(h -> h.getId() == id);
+            collection.add(human);
+            return true;
+        } finally {
+            lock.writeLock().unlock();
+        }
     }
 }

@@ -1,7 +1,5 @@
 package common.model;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import java.io.Serializable;
 
 /**
@@ -21,7 +19,7 @@ public class Coordinates implements Serializable{
      * @param y координата Y (не может быть null)
      * @throws IllegalArgumentException если x или y равен null
      */
-    public Coordinates(@JsonProperty("x") Double x, @JsonProperty("y") Float y) {
+    public Coordinates(Double x, Float y) {
         if (x == null) {
             throw new IllegalArgumentException("Поле x не может быть null");
         }

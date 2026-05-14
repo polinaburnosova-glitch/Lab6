@@ -110,5 +110,7 @@ public enum CommandType implements Serializable {
      * Выполнение команд из файла-скрипта.
      * Требует путь к файлу в качестве аргумента.
      */
-    EXECUTE_SCRIPT
+    EXECUTE_SCRIPT,
+    LOGIN,
+    REGISTER
 }

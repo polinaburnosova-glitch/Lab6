@@ -1,11 +1,5 @@
 package common.model;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
-import com.fasterxml.jackson.datatype.jsr310.deser.LocalDateTimeDeserializer;
-import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateTimeSerializer;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 
@@ -30,7 +24,7 @@ import java.time.LocalDateTime;
  */
 public class HumanBeing implements Comparable<HumanBeing>, Serializable {
     /** Версия для сериализации. */
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 2L;
 
     /** Уникальный идентификатор человека (генерируется автоматически). */
     private Long id;
@@ -40,8 +34,6 @@ public class HumanBeing implements Comparable<HumanBeing>, Serializable {
     private final Coordinates coordinates;
 
     /** Дата и время создания записи (генерируется автоматически). */
-    @JsonSerialize(using = LocalDateTimeSerializer.class)
-    @JsonDeserialize(using = LocalDateTimeDeserializer.class)
     private LocalDateTime creationDate;
 
     /** Флаг, указывающий, является ли человек настоящим героем. Не может быть null. */
@@ -58,6 +50,8 @@ public class HumanBeing implements Comparable<HumanBeing>, Serializable {
     private final Mood mood;
     /** Информация о машине. Не может быть null. */
     private final Car car;
+
+    private final String owner;
 
     /**
      * Конструктор для создания НОВЫХ объектов (без ID и даты создания).
@@ -77,7 +71,8 @@ public class HumanBeing implements Comparable<HumanBeing>, Serializable {
     public HumanBeing(String name, Coordinates coordinates,
                       Boolean realHero, Boolean hasToothpick,
                       float impactSpeed, String soundtrackName,
-                      WeaponType weaponType, Mood mood, Car car) {
+                      WeaponType weaponType, Mood mood,
+                      Car car, String owner) {
 
         if (name == null || name.trim().isEmpty()) {
             throw new IllegalArgumentException("name не может быть null или пустым");
@@ -123,6 +118,7 @@ public class HumanBeing implements Comparable<HumanBeing>, Serializable {
 
         this.id = null;
         this.creationDate = null;
+        this.owner = owner;
     }
 
     /**
@@ -142,19 +138,18 @@ public class HumanBeing implements Comparable<HumanBeing>, Serializable {
      * @param car информация о машине
      * @throws IllegalArgumentException если какой-либо из параметров некорректен
      */
-    @JsonCreator
     public HumanBeing(
-            @JsonProperty("id") Long id,
-            @JsonProperty("creationDate") LocalDateTime creationDate,
-            @JsonProperty("name") String name,
-            @JsonProperty("coordinates") Coordinates coordinates,
-            @JsonProperty("realHero") Boolean realHero,
-            @JsonProperty("hasToothpick") Boolean hasToothpick,
-            @JsonProperty("impactSpeed") float impactSpeed,
-            @JsonProperty("soundtrackName") String soundtrackName,
-            @JsonProperty("weaponType") WeaponType weaponType,
-            @JsonProperty("mood") Mood mood,
-            @JsonProperty("car") Car car) {
+            Long id,
+            LocalDateTime creationDate,
+            String name,
+            Coordinates coordinates,
+            Boolean realHero,
+            Boolean hasToothpick,
+            float impactSpeed,
+            String soundtrackName,
+            WeaponType weaponType,
+            Mood mood,
+            Car car, String owner) {
 
         if (id == null || id <= 0) {
             throw new IllegalArgumentException("id должен быть больше 0");
@@ -207,6 +202,8 @@ public class HumanBeing implements Comparable<HumanBeing>, Serializable {
             throw new IllegalArgumentException("car не может быть null");
         }
         this.car = car;
+
+        this.owner = owner;
     }
 
     /**
@@ -281,6 +278,10 @@ public class HumanBeing implements Comparable<HumanBeing>, Serializable {
      */
     public Car getCar() { return car; }
 
+    public String getOwner() {
+        return owner;
+    }
+
     /**
      * Сравнивает двух людей по ID.
      * Используется для сортировки коллекции по умолчанию.
@@ -305,8 +306,8 @@ public class HumanBeing implements Comparable<HumanBeing>, Serializable {
     @Override
     public String toString() {
         return String.format(
-                "HumanBeing{id=%d, name='%s', coordinates=(%s, %s), creationDate=%s, realHero=%s, hasToothpick=%s, impactSpeed=%.1f, soundtrackName='%s', weaponType=%s, mood=%s, car=%s}",
-                id, name, coordinates.getX(), coordinates.getY(), creationDate,
+                "HumanBeing{id=%d, name='%s', owner='%s', coordinates=(%s, %s), creationDate=%s, realHero=%s, hasToothpick=%s, impactSpeed=%.1f, soundtrackName='%s', weaponType=%s, mood=%s, car=%s}",
+                id, name, owner, coordinates.getX(), coordinates.getY(), creationDate,
                 realHero, hasToothpick, impactSpeed, soundtrackName, weaponType,
                 mood, car.getCool() ? "cool" : "not cool"
         );
